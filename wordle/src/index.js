@@ -1,161 +1,241 @@
+import { testDictionary, realDictionary } from "./dictionary.js";
+
 document.addEventListener("DOMContentLoaded", () => {
-  createSquares();
-  getNewWord();
+  // Use testDictionary while testing.
+  // Gonna change this to realDictionary when everything finally works.
+  const dictionary = realDictionary;
 
   let guessedWords = [[]];
   let availableSpace = 1;
-
-  let word;
+  let word = "";
   let guessedWordCount = 0;
+  let gameOver = false;
+
+  createSquares();
+  getNewWord();
 
   const keys = document.querySelectorAll(".keyboard-row button");
 
   function getNewWord() {
-    fetch(
-      `https://wordsapiv1.p.rapidapi.com/words/?random=true&lettersMin=5&lettersMax=5`,
-      {
-        method: "GET",
-        headers: {
-          "x-rapidapi-host": "wordsapiv1.p.rapidapi.com",
-          "x-rapidapi-key": "e7d489eaadmsh7f0b4b492d44bafp1518b6jsn4f89eb8902eb",
-        },
-      }
-    )
-      .then((response) => {
-        return response.json();
-      })
-      .then((res) => {
-        word = res.word;
-      })
-      .catch((err) => {
-        console.error(err);
-      });
+    const randomIndex = Math.floor(Math.random() * dictionary.length);
+    word = dictionary[randomIndex].toLowerCase();
+
+    // Remove this after testing(prolly not).
+    console.log("Secret word:", word);
   }
 
   function getCurrentWordArr() {
-    const numberOfGuessedWords = guessedWords.length;
-    return guessedWords[numberOfGuessedWords - 1];
+    return guessedWords[guessedWords.length - 1];
   }
 
   function updateGuessedWords(letter) {
+    if (gameOver) {
+      return;
+    }
+
     const currentWordArr = getCurrentWordArr();
 
-    if (currentWordArr && currentWordArr.length < 5) {
+    if (currentWordArr.length < 5) {
       currentWordArr.push(letter);
 
-      const availableSpaceEl = document.getElementById(String(availableSpace));
+      const availableSpaceEl = document.getElementById(
+        String(availableSpace)
+      );
 
-      availableSpace = availableSpace + 1;
-      availableSpaceEl.textContent = letter;
+      if (availableSpaceEl) {
+        availableSpaceEl.textContent = letter;
+        availableSpace++;
+      }
     }
   }
 
   function getTileColor(letter, index) {
-    const isCorrectLetter = word.includes(letter);
-
-    if (!isCorrectLetter) {
-      return "rgb(58, 58, 60)";
-    }
-
-    const letterInThatPosition = word.charAt(index);
-    const isCorrectPosition = letter === letterInThatPosition;
-
-    if (isCorrectPosition) {
+    if (letter === word.charAt(index)) {
       return "rgb(83, 141, 78)";
     }
 
-    return "rgb(181, 159, 59)";
+    if (word.includes(letter)) {
+      return "rgb(181, 159, 59)";
+    }
+
+    return "rgb(58, 58, 60)";
   }
 
   function handleSubmitWord() {
-    const currentWordArr = getCurrentWordArr();
-    if (currentWordArr.length !== 5) {
-      window.alert("Word must be 5 letters");
+    if (gameOver) {
+      return;
     }
 
-    const currentWord = currentWordArr.join("");
+    const currentWordArr = getCurrentWordArr();
 
-    fetch(`https://wordsapiv1.p.rapidapi.com/words/${currentWord}`, {
-      method: "GET",
-      headers: {
-        "x-rapidapi-host": "wordsapiv1.p.rapidapi.com",
-        "x-rapidapi-key": "e7d489eaadmsh7f0b4b492d44bafp1518b6jsn4f89eb8902eb",
-      },
-    })
-      .then((res) => {
-        if (!res.ok) {
-          throw Error();
+    if (currentWordArr.length !== 5) {
+      window.alert("Word must be 5 letters.");
+      return;
+    }
+
+    const currentWord = currentWordArr.join("").toLowerCase();
+
+    console.log("Submitted word:", currentWord);
+
+    if (!dictionary.includes(currentWord)) {
+      window.alert("Word is not recognized!");
+      return;
+    }
+
+    const firstLetterId = guessedWordCount * 5 + 1;
+    const animationDelay = 200;
+
+    currentWordArr.forEach((letter, index) => {
+      setTimeout(() => {
+        const tileColor = getTileColor(letter, index);
+        const letterId = firstLetterId + index;
+        const letterEl = document.getElementById(String(letterId));
+
+        if (!letterEl) {
+          return;
         }
 
-        const firstLetterId = guessedWordCount * 5 + 1;
-        const interval = 200;
-        currentWordArr.forEach((letter, index) => {
-          setTimeout(() => {
-            const tileColor = getTileColor(letter, index);
+        letterEl.classList.add("animate__flipInX");
+        letterEl.style.backgroundColor = tileColor;
+        letterEl.style.borderColor = tileColor;
 
-            const letterId = firstLetterId + index;
-            const letterEl = document.getElementById(letterId);
-            letterEl.classList.add("animate__flipInX");
-            letterEl.style = `background-color:${tileColor};border-color:${tileColor}`;
-          }, interval * index);
-        });
+        updateKeyboardColor(letter, tileColor);
+      }, animationDelay * index);
+    });
 
-        guessedWordCount += 1;
+    guessedWordCount++;
 
-        if (currentWord === word) {
-          window.alert("Congratulations!");
-        }
+    if (currentWord === word) {
+      gameOver = true;
 
-        if (guessedWords.length === 6) {
-          window.alert(`Sorry, you have no more guesses! The word is ${word}.`);
-        }
+      setTimeout(() => {
+        window.alert("Congratulations!");
+      }, 1100);
 
-        guessedWords.push([]);
-      })
-      .catch(() => {
-        window.alert("Word is not recognised!");
-      });
+      return;
+    }
+
+    if (guessedWordCount === 6) {
+      gameOver = true;
+
+      setTimeout(() => {
+        window.alert(`Sorry! The word was "${word}".`);
+      }, 1100);
+
+      return;
+    }
+
+    guessedWords.push([]);
   }
 
   function createSquares() {
     const gameBoard = document.getElementById("board");
 
+    if (!gameBoard) {
+      console.error('Element with id="board" was not found.');
+      return;
+    }
+
+    gameBoard.innerHTML = "";
+
     for (let index = 0; index < 30; index++) {
-      let square = document.createElement("div");
+      const square = document.createElement("div");
+
       square.classList.add("square");
       square.classList.add("animate__animated");
-      square.setAttribute("id", index + 1);
+      square.setAttribute("id", String(index + 1));
+
       gameBoard.appendChild(square);
     }
   }
 
   function handleDeleteLetter() {
+    if (gameOver) {
+      return;
+    }
+
     const currentWordArr = getCurrentWordArr();
-    const removedLetter = currentWordArr.pop();
 
-    guessedWords[guessedWords.length - 1] = currentWordArr;
+    if (currentWordArr.length === 0) {
+      return;
+    }
 
-    const lastLetterEl = document.getElementById(String(availableSpace - 1));
+    currentWordArr.pop();
+    availableSpace--;
 
-    lastLetterEl.textContent = "";
-    availableSpace = availableSpace - 1;
+    const lastLetterEl = document.getElementById(
+      String(availableSpace)
+    );
+
+    if (lastLetterEl) {
+      lastLetterEl.textContent = "";
+    }
   }
 
-  for (let i = 0; i < keys.length; i++) {
-    keys[i].onclick = ({ target }) => {
-      const letter = target.getAttribute("data-key");
+  function updateKeyboardColor(letter, tileColor) {
+    const keyboardButton = document.querySelector(
+      `button[data-key="${letter}"]`
+    );
 
-      if (letter === "enter") {
+    if (!keyboardButton) {
+      return;
+    }
+
+    const currentColor = keyboardButton.style.backgroundColor;
+    const green = "rgb(83, 141, 78)";
+    const yellow = "rgb(181, 159, 59)";
+
+    // Do not replace green with yellow or gray.
+    if (currentColor === green) {
+      return;
+    }
+
+    // Do not replace yellow with gray.
+    if (
+      currentColor === yellow &&
+      tileColor === "rgb(58, 58, 60)"
+    ) {
+      return;
+    }
+
+    keyboardButton.style.backgroundColor = tileColor;
+    keyboardButton.style.color = "white";
+  }
+
+  keys.forEach((key) => {
+    key.addEventListener("click", () => {
+      const pressedKey = key.dataset.key;
+
+      if (pressedKey === "enter") {
         handleSubmitWord();
         return;
       }
 
-      if (letter === "del") {
+      if (pressedKey === "del") {
         handleDeleteLetter();
         return;
       }
 
-      updateGuessedWords(letter);
-    };
-  }
+      updateGuessedWords(pressedKey);
+    });
+  });
+
+  // Optional: allow the physical keyboard to work too.
+  document.addEventListener("keydown", (event) => {
+    const pressedKey = event.key.toLowerCase();
+
+    if (pressedKey === "enter") {
+      handleSubmitWord();
+      return;
+    }
+
+    if (pressedKey === "backspace" || pressedKey === "delete") {
+      handleDeleteLetter();
+      return;
+    }
+
+    if (/^[a-z]$/.test(pressedKey)) {
+      updateGuessedWords(pressedKey);
+    }
+  });
 });
